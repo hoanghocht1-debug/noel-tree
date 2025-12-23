@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>Cây Thông Noel Tương Tác</title>
+
+<style>
+  body {
+    margin: 0;
+    background: black;
+    overflow: hidden;
+  }
+  canvas {
+    position: absolute;
+  }
+  video {
+    display: none;
+  }
+</style>
+</head>
+
+<body>
+
+<!-- CAMERA -->
+<video id="video" autoplay></video>
+
+<!-- CANVAS -->
+<canvas id="canvas"></canvas>
+
+<!-- NHẠC NOEL -->
+<audio id="music" src="noel.mp3" loop></audio>
+
+<!-- MEDIAPIPE -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<script>
+/* ================== CANVAS ================== */
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+/* ================== NHẠC ================== */
+const music = document.getElementById("music");
+let daBatNhac = false;
+
+/* ================== BIẾN ĐIỀU KHIỂN ================== */
+let gocXoay = 0;
+let mucZoom = 1;
+
+/* ================== TÂM CÂY ================== */
+const tamX = canvas.width / 2;
+const tamY = canvas.height * 0.85;
+
+/* ================== TẠO CÂY ================== */
+let dots = [];
+
+function taoCay() {
+  dots = [];
+  for (let y = 0; y < 420; y += 10) {
+    let width = y * 0.7;
+    for (let x = -width; x < width; x += 14) {
+      dots.push({
+        x,
+        y: -y,
+        r: 4,
+        color: `hsl(${Math.random()*360},100%,60%)`
+      });
+    }
+  }
+}
+taoCay();
+
+/* ================== ẢNH NGÔI SAO ================== */
+const sao = new Image();
+sao.src = "star.png"; // bạn có thể đổi ảnh khác
+
+/* ================== VẼ ================== */
+function veCay() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  dots.forEach(d => {
+    const dx = d.x * mucZoom;
+    const dy = d.y * mucZoom;
+
+    const xr = dx * Math.cos(gocXoay) - dy * Math.sin(gocXoay);
+    const yr = dx * Math.sin(gocXoay) + dy * Math.cos(gocXoay);
+
+    ctx.beginPath();
+    ctx.arc(tamX + xr, tamY + yr, d.r, 0, Math.PI*2);
+    ctx.fillStyle = d.color;
+    ctx.fill();
+  });
+
+  veSao();
+}
+
+function veSao() {
+  const sy = -450 * mucZoom;
+  const xr = sy * Math.sin(gocXoay);
+  const yr = sy * Math.cos(gocXoay);
+
+  ctx.save();
+  ctx.translate(tamX + xr, tamY + yr);
+  ctx.rotate(gocXoay);
+  ctx.drawImage(sao, -40, -40, 80, 80);
+  ctx.restore();
+}
+
+setInterval(veCay, 30);
+
+/* ================== CAMERA + TAY ================== */
+const video = document.getElementById("video");
+
+const hands = new Hands({
+  locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`
+});
+
+hands.setOptions({
+  maxNumHands: 2,
+  minDetectionConfidence: 0.7,
+  minTrackingConfidence: 0.7
+});
+
+hands.onResults(results => {
+  if (!results.multiHandLandmarks) return;
+
+  /* BẬT NHẠC KHI CÓ TƯƠNG TÁC */
+  if (!daBatNhac) {
+    music.play();
+    daBatNhac = true;
+  }
+
+  /* 1 TAY → XOAY */
+  if (results.multiHandLandmarks.length === 1) {
+    const finger = results.multiHandLandmarks[0][8];
+    const target = (finger.x - 0.5) * 2;
+    gocXoay += (target - gocXoay) * 0.1;
+  }
+
+  /* 2 TAY → ZOOM */
+  if (results.multiHandLandmarks.length === 2) {
+    const t1 = results.multiHandLandmarks[0][8];
+    const t2 = results.multiHandLandmarks[1][8];
+    const dx = t1.x - t2.x;
+    const dy = t1.y - t2.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    mucZoom = Math.min(1.5, Math.max(0.6, dist * 2));
+  }
+});
+
+const camera = new Camera(video, {
+  onFrame: async () => {
+    await hands.send({ image: video });
+  },
+  width: 640,
+  height: 480
+});
+camera.start();
+
+</script>
+</body>
+</html>
